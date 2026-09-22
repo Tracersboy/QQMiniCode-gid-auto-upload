@@ -10,6 +10,30 @@
 - 服务器 → 客户端方向的游戏协议响应为明文，App 在转发的同时**只读嗅探**并即时解析
 - 一次打开农场即可拿全量好友（实测 145 位，含 gid/昵称/等级/open_id），支持一键复制 JSON 数组导入机器人/服务器
 
+## ⚡ 本 Fork 增强说明（与原版区别）
+
+> Fork 仓库：https://github.com/Tracersboy/QQMiniCode-gid-auto-upload
+> 不想自己编译？**Releases 页面可直接下载已编译 APK**（v2.1.0 / v2.2.0 已发布）。
+
+以下为本 Fork 在 huojiujian 原版 2.0 基础上新增的能力（原版抓包 / GID 解析逻辑完全未改动）：
+
+| 新增能力 | 说明 |
+| --- | --- |
+| 📤 「上传到 qq-farm-bot 面板」卡片 | 主界面新增区块：配置面板 API 地址 + 管理 Token + 账号备注 + Code，一键把抓到的 code 提交到 qq-farm-bot Web 面板（`POST /api/accounts`，同名账号更新 code 并自动重启登录，新账号自动创建并启动） |
+| 💾 「保存配置」 | 面板地址 / Token / 备注 / 开关状态本地持久化（SharedPreferences），code 不落盘 |
+| ✅ 「验证Token」 | `GET /api/auth/validate` 预检 Token 与面板连通性 |
+| 🔀 开关「抓到Code后自动填入」 | 默认开启；抓到新 code 时自动填入上传输入框（只填入，不自动提交） |
+| 📊 按钮「在线状态」 | `GET /api/accounts` 查询面板账号在线状态（运行中时再查 `/api/status` 附等级/经验）；备注留空时列出面板全部账号 |
+| 🤖 GitHub Actions 自动编译 | push 到 `main`/`master` 自动构建 debug + release APK 并上传 Artifacts；打 `v*` tag 自动发布 Release 附 APK |
+
+### 版本历史
+
+| 版本 | 内容 |
+| --- | --- |
+| 2.0.0 | 原版（huojiujian）：抓包 code + 好友 GID 抓包即解析 |
+| 2.1.0 | 本 Fork：新增「上传到 qq-farm-bot 面板」卡片 + GitHub Actions 自动编译发布 |
+| 2.2.0 | 本 Fork：新增「抓到Code后自动填入」开关 + 面板账号「在线状态」查询 |
+
 ## 功能
 
 | 能力 | 说明 |
@@ -78,8 +102,9 @@ qq-farm-bot Web 面板（登录/更新对应 QQ 账号）：
 
 1. 填写 **面板 API 地址**（如 `http://192.168.1.10:3007`，面板默认端口 3007）、
    **管理 Token**、**账号备注**（必填，面板内同名账号会被更新 code 并重启，否则新建并自动启动）
-2. Token 获取：登录面板后，浏览器开发者工具 → localStorage 里的 `admin_token`；
-   或抓包面板请求，看请求头里的 `x-admin-token`
+2. Token 获取：浏览器登录面板后按 **F12 → 应用(Application) → Local Storage → `admin_token`**；
+   或抓包面板请求，看请求头里的 `x-admin-token`。
+   ⚠️ 注意：**面板重启后 token 会失效**，需重新登录面板再取一次
 3. 点「填入已抓取的Code」把当前捕获的 code 填进 Code 输入框（也可手动粘贴）；
    打开「抓到Code后自动填入」开关（默认开）后，每次抓到新 code 会自动填入
 4. 点「保存配置」可记住地址 / Token / 备注 / 开关状态（code 不会保存）；
@@ -95,8 +120,10 @@ qq-farm-bot Web 面板（登录/更新对应 QQ 账号）：
 
 - push 到 `master` / `main`，或在 Actions 页面手动运行（workflow_dispatch）：
   自动跑单测并编译 debug + release APK，在运行结果的 **Artifacts** 里下载
-- 打 `v*` 开头的 tag 并推送（如 `git tag v2.1.0 && git push origin v2.1.0`）：
+- 打 `v*` 开头的 tag 并推送（如 `git tag v2.2.0 && git push origin v2.2.0`）：
   除 Artifacts 外还会自动创建 **GitHub Release** 并附带两个 APK、自动生成更新日志
+- 不想自己跑 CI：直接到本仓库
+  [Releases](https://github.com/Tracersboy/QQMiniCode-gid-auto-upload/releases) 页面下载已发布的 APK
 
 ## License
 
