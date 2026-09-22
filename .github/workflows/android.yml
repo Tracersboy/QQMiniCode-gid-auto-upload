@@ -26,13 +26,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
+      # ubuntu-latest runner 预装 Android SDK（ANDROID_HOME/ANDROID_SDK_ROOT 已就绪），
+      # 无需 android-actions/setup-android，直接用预装的 sdkmanager 补齐缺失组件。
       - name: Install Android SDK components
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-37" "build-tools;36.0.0" "ndk;26.3.11579264"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          SDKMANAGER=sdkmanager
+          command -v sdkmanager >/dev/null 2>&1 || SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          echo "using sdkmanager: $SDKMANAGER"
+          "$SDKMANAGER" --list_installed || true
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-37" "build-tools;36.0.0" "ndk;26.3.11579264"
 
       - name: Unit tests
         run: |
