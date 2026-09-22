@@ -411,6 +411,16 @@
                 android:textSize="14sp"
                 android:textColor="@color/text_primary"/>
 
+            <!-- 抓到 code 自动填入开关（默认开） -->
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switchAutoFill"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/switch_auto_fill_code"
+                android:textSize="13sp"
+                android:textColor="@color/text_primary"/>
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -481,6 +491,20 @@
                     app:cornerRadius="10dp"
                     app:backgroundTint="@color/accent"/>
             </LinearLayout>
+
+            <!-- 查询面板账号在线状态 -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnQueryOnlineStatus"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginTop="8dp"
+                android:text="@string/btn_query_online_status"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:textColor="@color/accent"
+                app:cornerRadius="10dp"
+                app:backgroundTint="@color/accent_tonal"/>
 
             <TextView
                 android:id="@+id/tvUploadStatus"

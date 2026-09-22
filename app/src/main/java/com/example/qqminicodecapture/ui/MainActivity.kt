@@ -26,6 +26,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
 import com.example.qqminicodecapture.BuildConfig
 import com.example.qqminicodecapture.R
@@ -74,6 +75,7 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_API_BASE = "api_base"
         private const val KEY_ADMIN_TOKEN = "admin_token"
         private const val KEY_ACCOUNT_NAME = "account_name"
+        private const val KEY_AUTO_FILL = "auto_fill_code"
     }
 
     private lateinit var btnStartCapture: Button
@@ -104,6 +106,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSavePanelConfig: Button
     private lateinit var btnValidateToken: Button
     private lateinit var btnSubmitCode: Button
+    private lateinit var switchAutoFill: SwitchCompat
+    private lateinit var btnQueryOnlineStatus: Button
 
     // 仅调试版存在的控件
     private var tvLog: TextView? = null
@@ -255,11 +259,23 @@ class MainActivity : AppCompatActivity() {
         btnSavePanelConfig  = findViewById(R.id.btnSavePanelConfig)
         btnValidateToken    = findViewById(R.id.btnValidateToken)
         btnSubmitCode       = findViewById(R.id.btnSubmitCode)
+        switchAutoFill      = findViewById(R.id.switchAutoFill)
+        btnQueryOnlineStatus = findViewById(R.id.btnQueryOnlineStatus)
         loadPanelConfig()
         btnSavePanelConfig.setOnClickListener { savePanelConfig() }
         btnFillCapturedCode.setOnClickListener { fillCapturedCode() }
         btnValidateToken.setOnClickListener { validatePanelToken() }
         btnSubmitCode.setOnClickListener { submitPanelCode() }
+        btnQueryOnlineStatus.setOnClickListener { queryOnlineStatus() }
+        // 开关状态即时持久化（「保存配置」里也会再写一次，双保险）
+        switchAutoFill.setOnCheckedChangeListener { _, isChecked ->
+            try {
+                getSharedPreferences(PREFS_PANEL, Context.MODE_PRIVATE).edit()
+                    .putBoolean(KEY_AUTO_FILL, isChecked).apply()
+            } catch (t: Throwable) {
+                AppLogger.w(TAG, "保存自动填入开关状态失败: ${t.message}")
+            }
+        }
 
         // ★ 跨进程事件通道：CaptureVpnService 跑在 ":vpn" 独立进程，
         // 抓到的 code/状态/错误/好友数据经广播回到主进程，由 receiver 驱动统一的事件方法。
@@ -302,6 +318,12 @@ class MainActivity : AppCompatActivity() {
     private fun onCodeEvent(code: String) {
         AppLogger.i(TAG, "捕获到 code: $code")
         try { etCode.setText(code) } catch (_: Throwable) {}
+        // 「抓到Code后自动填入」开关开启时，同步填入上传卡片（只填入，不自动提交）
+        try {
+            if (::switchAutoFill.isInitialized && switchAutoFill.isChecked) {
+                etUploadCode.setText(code)
+            }
+        } catch (_: Throwable) {}
         // v2.1：好友 GID 走"抓包自动解析"，无需再用 code 手动拉取
     }
 
@@ -440,6 +462,8 @@ class MainActivity : AppCompatActivity() {
             etApiBase.setText(sp.getString(KEY_API_BASE, "") ?: "")
             etAdminToken.setText(sp.getString(KEY_ADMIN_TOKEN, "") ?: "")
             etAccountName.setText(sp.getString(KEY_ACCOUNT_NAME, "") ?: "")
+            // 自动填入开关默认开
+            switchAutoFill.isChecked = sp.getBoolean(KEY_AUTO_FILL, true)
         } catch (t: Throwable) {
             AppLogger.w(TAG, "读取面板配置失败: ${t.message}")
         }
@@ -452,6 +476,7 @@ class MainActivity : AppCompatActivity() {
                 .putString(KEY_API_BASE, normalizeBaseUrl(etApiBase.text.toString()))
                 .putString(KEY_ADMIN_TOKEN, etAdminToken.text.toString().trim())
                 .putString(KEY_ACCOUNT_NAME, etAccountName.text.toString().trim())
+                .putBoolean(KEY_AUTO_FILL, switchAutoFill.isChecked)
                 .apply()
             AppLogger.i(TAG, "面板配置已保存")
             Toast.makeText(this, "配置已保存", Toast.LENGTH_SHORT).show()
@@ -566,17 +591,129 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * 「在线状态」：查询面板账号运行状态。
+     * 备注非空 → 精确匹配该账号，显示在线情况/昵称/QQ；运行中时再用
+     * GET /api/status（x-account-id 头）附带等级与经验。
+     * 备注为空 → 列出面板全部账号（每行：备注 | id | 运行状态 | 昵称）。
+     */
+    private fun queryOnlineStatus() {
+        val base = normalizeBaseUrl(etApiBase.text.toString())
+        val token = etAdminToken.text.toString().trim()
+        val name = etAccountName.text.toString().trim()
+        if (base.isEmpty() || token.isEmpty()) {
+            Toast.makeText(this, "请先填写面板 API 地址和 Token", Toast.LENGTH_SHORT).show()
+            return
+        }
+        btnQueryOnlineStatus.isEnabled = false
+        tvUploadStatus.text = "正在查询在线状态..."
+        AppLogger.i(TAG, "查询面板账号状态: $base/api/accounts name=${name.ifBlank { "(全部)" }}")
+        Thread({
+            var toastMsg = "查询完成"
+            val msg = try {
+                val (httpCode, resp) = panelRequest("GET", "$base/api/accounts", token, null)
+                val json = try { JSONObject(resp) } catch (_: Throwable) { null }
+                if (json?.optBoolean("ok", false) != true) {
+                    val err = json?.optString("error").orEmpty()
+                    toastMsg = "查询失败"
+                    if (err.isNotBlank()) "查询失败 HTTP $httpCode: $err"
+                    else "查询失败 HTTP $httpCode: $resp"
+                } else {
+                    val accounts = json.optJSONObject("data")?.optJSONArray("accounts")
+                    if (accounts == null || accounts.length() == 0) {
+                        toastMsg = "面板暂无账号"
+                        "面板中还没有任何账号"
+                    } else if (name.isEmpty()) {
+                        // 备注为空：列出全部账号
+                        val sb = StringBuilder("面板共 ${accounts.length()} 个账号：\n")
+                        for (i in 0 until accounts.length()) {
+                            val acc = accounts.optJSONObject(i) ?: continue
+                            sb.append(describeAccountLine(acc)).append('\n')
+                        }
+                        toastMsg = "共 ${accounts.length()} 个账号"
+                        sb.toString().trimEnd()
+                    } else {
+                        var found: JSONObject? = null
+                        for (i in 0 until accounts.length()) {
+                            val acc = accounts.optJSONObject(i) ?: continue
+                            if (acc.optString("name").trim() == name) { found = acc; break }
+                        }
+                        val acc = found
+                        if (acc == null) {
+                            toastMsg = "未找到账号"
+                            "面板中未找到备注为「$name」的账号"
+                        } else {
+                            val running = acc.optBoolean("running", false)
+                            toastMsg = if (running) "在线" else "已停止"
+                            val sb = StringBuilder()
+                            sb.append("备注：").append(acc.optString("name")).append('\n')
+                            sb.append("ID：").append(acc.optLong("id")).append('\n')
+                            sb.append("状态：").append(if (running) "在线运行中" else "已停止")
+                            val nick = acc.optString("nick").trim()
+                            if (nick.isNotEmpty()) sb.append('\n').append("昵称：").append(nick)
+                            val uin = acc.optString("uin").trim()
+                                .ifEmpty { acc.optString("qq").trim() }
+                            if (uin.isNotEmpty()) sb.append('\n').append("QQ：").append(uin)
+                            // 运行中时拉取实时状态（等级/经验），字段缺失时静默跳过
+                            if (running) {
+                                try {
+                                    val (_, resp2) = panelRequest("GET", "$base/api/status",
+                                        token, null, acc.optLong("id").toString())
+                                    val j2 = try { JSONObject(resp2) } catch (_: Throwable) { null }
+                                    val st = j2?.optJSONObject("data")?.optJSONObject("status")
+                                    if (j2?.optBoolean("ok", false) == true && st != null) {
+                                        if (st.has("level")) sb.append('\n').append("等级：").append(st.opt("level"))
+                                        if (st.has("exp")) sb.append("  经验：").append(st.opt("exp"))
+                                    }
+                                } catch (t: Throwable) {
+                                    AppLogger.w(TAG, "拉取账号实时状态失败: ${t.message}")
+                                }
+                            }
+                            sb.toString()
+                        }
+                    }
+                }
+            } catch (t: Throwable) {
+                AppLogger.w(TAG, "查询在线状态异常: ${t.message}")
+                toastMsg = "查询异常"
+                "查询异常: ${t.message}"
+            }
+            val toast = toastMsg
+            runOnUiThread {
+                try {
+                    tvUploadStatus.text = msg
+                    Toast.makeText(this, toast, Toast.LENGTH_SHORT).show()
+                } catch (_: Throwable) {}
+                try { btnQueryOnlineStatus.isEnabled = true } catch (_: Throwable) {}
+            }
+        }, "panel-status").start()
+    }
+
+    /** 单行账号描述：备注 | id | 运行状态 | 昵称 */
+    private fun describeAccountLine(acc: JSONObject): String {
+        val nick = acc.optString("nick").trim()
+        return buildString {
+            append(acc.optString("name").ifBlank { "(无备注)" })
+            append(" | id=").append(acc.optLong("id"))
+            append(" | ").append(if (acc.optBoolean("running", false)) "运行中" else "已停止")
+            if (nick.isNotEmpty()) append(" | ").append(nick)
+        }
+    }
+
+    /**
      * 面板 HTTP 请求：HttpURLConnection，连接/读取超时各 15s，
-     * 鉴权头为 x-admin-token（不是 Authorization Bearer）。
+     * 鉴权头为 x-admin-token（不是 Authorization Bearer）；
+     * accountId 非空时附带 x-account-id 头（/api/status 需要）。
      * 返回 HTTP 状态码 + 响应体文本。
      */
-    private fun panelRequest(method: String, url: String, token: String, body: String?): Pair<Int, String> {
+    private fun panelRequest(method: String, url: String, token: String, body: String?,
+                             accountId: String? = null): Pair<Int, String> {
         val conn = URL(url).openConnection() as HttpURLConnection
         try {
             conn.requestMethod = method
             conn.connectTimeout = 15_000
             conn.readTimeout = 15_000
             conn.setRequestProperty("x-admin-token", token)
+            if (accountId != null) conn.setRequestProperty("x-account-id", accountId)
             conn.setRequestProperty("Accept", "application/json")
             if (body != null) {
                 conn.doOutput = true

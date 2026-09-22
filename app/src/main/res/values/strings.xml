@@ -61,6 +61,8 @@
     <string name="btn_save_panel_config">保存配置</string>
     <string name="btn_validate_token">验证Token</string>
     <string name="btn_submit_code">提交 Code</string>
+    <string name="switch_auto_fill_code">抓到Code后自动填入</string>
+    <string name="btn_query_online_status">在线状态</string>
     <string name="upload_status_idle">提交结果会显示在这里</string>
 
 </resources>
