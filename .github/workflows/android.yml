@@ -1,0 +1,56 @@
+# 由 huojiujian 开源免费使用，二改请备注来源；地址 https://github.com/huojiujian2
+# 编译 APK 并发布 Release：
+#  - push 到 master/main 或手动触发：编译 debug + release APK，上传 Artifacts
+#  - 打 v* tag：额外创建 GitHub Release 并附带 APK
+name: Android CI
+
+on:
+  push:
+    branches: [master, main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-37" "build-tools;36.0.0" "ndk;26.3.11579264"
+
+      - name: Unit tests
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Build APKs (debug + release)
+        run: ./gradlew assembleDebug assembleRelease --no-daemon --stacktrace
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apks
+          path: app/build/outputs/apk/**/*.apk
+
+      - name: Create GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/**/*.apk
+          generate_release_notes: true

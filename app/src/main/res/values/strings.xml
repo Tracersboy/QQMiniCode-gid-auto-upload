@@ -51,4 +51,16 @@
     <string name="btn_follow_github">关注 GitHub</string>
     <string name="github_url">https://github.com/huojiujian2</string>
 
+    <!-- 上传到 qq-farm-bot 面板 -->
+    <string name="upload_card_title">上传到 qq-farm-bot 面板</string>
+    <string name="upload_hint_api">面板 API 地址（如 http://192.168.1.10:3007）</string>
+    <string name="upload_hint_token">管理 Token（x-admin-token）</string>
+    <string name="upload_hint_name">账号备注（必填，同名则更新并重启）</string>
+    <string name="upload_hint_code">要提交的 Code</string>
+    <string name="btn_fill_captured_code">填入已抓取的Code</string>
+    <string name="btn_save_panel_config">保存配置</string>
+    <string name="btn_validate_token">验证Token</string>
+    <string name="btn_submit_code">提交 Code</string>
+    <string name="upload_status_idle">提交结果会显示在这里</string>
+
 </resources>

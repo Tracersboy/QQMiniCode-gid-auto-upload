@@ -339,5 +339,160 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
+    <!-- 上传到 qq-farm-bot 面板 卡片 -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/uploadCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="@color/stroke_card"
+        app:cardBackgroundColor="@color/bg_card"
+        app:layout_constraintTop_toBottomOf="@id/gidCard"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/upload_card_title"
+                android:textSize="12sp"
+                android:textColor="@color/text_secondary"/>
+
+            <EditText
+                android:id="@+id/etApiBase"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:hint="@string/upload_hint_api"
+                android:inputType="textUri"
+                android:singleLine="true"
+                android:textSize="14sp"
+                android:textColor="@color/text_primary"/>
+
+            <EditText
+                android:id="@+id/etAdminToken"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/upload_hint_token"
+                android:inputType="text"
+                android:singleLine="true"
+                android:textSize="14sp"
+                android:textColor="@color/text_primary"/>
+
+            <EditText
+                android:id="@+id/etAccountName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/upload_hint_name"
+                android:inputType="text"
+                android:singleLine="true"
+                android:textSize="14sp"
+                android:textColor="@color/text_primary"/>
+
+            <EditText
+                android:id="@+id/etUploadCode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/upload_hint_code"
+                android:inputType="text"
+                android:singleLine="true"
+                android:textSize="14sp"
+                android:textColor="@color/text_primary"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal"
+                android:weightSum="2">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnFillCapturedCode"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:text="@string/btn_fill_captured_code"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/accent"
+                    app:cornerRadius="10dp"
+                    app:backgroundTint="@color/accent_tonal"/>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSavePanelConfig"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:text="@string/btn_save_panel_config"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/accent"
+                    app:cornerRadius="10dp"
+                    app:backgroundTint="@color/accent_tonal"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal"
+                android:weightSum="2">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnValidateToken"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:text="@string/btn_validate_token"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/accent"
+                    app:cornerRadius="10dp"
+                    app:backgroundTint="@color/accent_tonal"/>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSubmitCode"
+                    style="@style/Widget.Material3.Button"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:text="@string/btn_submit_code"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="10dp"
+                    app:backgroundTint="@color/accent"/>
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvUploadStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/upload_status_idle"
+                android:textIsSelectable="true"
+                android:textSize="12sp"
+                android:textColor="@color/text_tertiary"/>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
 </androidx.constraintlayout.widget.ConstraintLayout>
 </ScrollView>

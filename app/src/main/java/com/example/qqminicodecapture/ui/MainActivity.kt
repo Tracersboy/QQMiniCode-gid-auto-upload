@@ -39,6 +39,8 @@ import com.example.qqminicodecapture.util.FileLog
 import com.example.qqminicodecapture.vpn.CaptureVpnService
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * 主界面
@@ -66,6 +68,12 @@ class MainActivity : AppCompatActivity() {
 
         /** 日志面板刷新周期：把高频日志攒起来批量刷新，而不是每条都 post 主线程 */
         private const val LOG_FLUSH_INTERVAL_MS = 300L
+
+        /** 面板配置 SharedPreferences 文件名与键（code 不持久化，仅存 api 地址 / token / 备注） */
+        private const val PREFS_PANEL = "panel_config"
+        private const val KEY_API_BASE = "api_base"
+        private const val KEY_ADMIN_TOKEN = "admin_token"
+        private const val KEY_ACCOUNT_NAME = "account_name"
     }
 
     private lateinit var btnStartCapture: Button
@@ -85,6 +93,17 @@ class MainActivity : AppCompatActivity() {
     private var lastActionableGids: List<Long> = emptyList()
     private var gidRawJson: String = ""
     private var mergedFriends: Map<Long, JSONObject> = emptyMap()
+
+    // ---- 上传到 qq-farm-bot 面板 ----
+    private lateinit var etApiBase: EditText
+    private lateinit var etAdminToken: EditText
+    private lateinit var etAccountName: EditText
+    private lateinit var etUploadCode: EditText
+    private lateinit var tvUploadStatus: TextView
+    private lateinit var btnFillCapturedCode: Button
+    private lateinit var btnSavePanelConfig: Button
+    private lateinit var btnValidateToken: Button
+    private lateinit var btnSubmitCode: Button
 
     // 仅调试版存在的控件
     private var tvLog: TextView? = null
@@ -225,6 +244,22 @@ class MainActivity : AppCompatActivity() {
 
         // v2.1 抓包即解析：复制 GID / 复制 JSON 数组
         btnCopyGids.setOnClickListener { copyActionableGidsJson() }
+
+        // ---- 上传到 qq-farm-bot 面板 ----
+        etApiBase           = findViewById(R.id.etApiBase)
+        etAdminToken        = findViewById(R.id.etAdminToken)
+        etAccountName       = findViewById(R.id.etAccountName)
+        etUploadCode        = findViewById(R.id.etUploadCode)
+        tvUploadStatus      = findViewById(R.id.tvUploadStatus)
+        btnFillCapturedCode = findViewById(R.id.btnFillCapturedCode)
+        btnSavePanelConfig  = findViewById(R.id.btnSavePanelConfig)
+        btnValidateToken    = findViewById(R.id.btnValidateToken)
+        btnSubmitCode       = findViewById(R.id.btnSubmitCode)
+        loadPanelConfig()
+        btnSavePanelConfig.setOnClickListener { savePanelConfig() }
+        btnFillCapturedCode.setOnClickListener { fillCapturedCode() }
+        btnValidateToken.setOnClickListener { validatePanelToken() }
+        btnSubmitCode.setOnClickListener { submitPanelCode() }
 
         // ★ 跨进程事件通道：CaptureVpnService 跑在 ":vpn" 独立进程，
         // 抓到的 code/状态/错误/好友数据经广播回到主进程，由 receiver 驱动统一的事件方法。
@@ -394,6 +429,167 @@ class MainActivity : AppCompatActivity() {
             AppLogger.w(TAG, "Toast 显示失败: ${t.message}")
         }
         try { isCapturing = false } catch (_: Throwable) {}
+    }
+
+    // ---------------- 上传到 qq-farm-bot 面板 ----------------
+
+    /** 启动时回填已保存的面板配置（api 地址 / token / 备注；code 不持久化） */
+    private fun loadPanelConfig() {
+        try {
+            val sp = getSharedPreferences(PREFS_PANEL, Context.MODE_PRIVATE)
+            etApiBase.setText(sp.getString(KEY_API_BASE, "") ?: "")
+            etAdminToken.setText(sp.getString(KEY_ADMIN_TOKEN, "") ?: "")
+            etAccountName.setText(sp.getString(KEY_ACCOUNT_NAME, "") ?: "")
+        } catch (t: Throwable) {
+            AppLogger.w(TAG, "读取面板配置失败: ${t.message}")
+        }
+    }
+
+    /** 「保存配置」：持久化 api 地址 / token / 备注（不存 code） */
+    private fun savePanelConfig() {
+        try {
+            getSharedPreferences(PREFS_PANEL, Context.MODE_PRIVATE).edit()
+                .putString(KEY_API_BASE, normalizeBaseUrl(etApiBase.text.toString()))
+                .putString(KEY_ADMIN_TOKEN, etAdminToken.text.toString().trim())
+                .putString(KEY_ACCOUNT_NAME, etAccountName.text.toString().trim())
+                .apply()
+            AppLogger.i(TAG, "面板配置已保存")
+            Toast.makeText(this, "配置已保存", Toast.LENGTH_SHORT).show()
+        } catch (t: Throwable) {
+            AppLogger.w(TAG, "保存面板配置失败: ${t.message}")
+            Toast.makeText(this, "保存失败: ${t.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** 「填入已抓取的Code」：把上方捕获卡片里的 code 填进上传输入框 */
+    private fun fillCapturedCode() {
+        val code = try { etCode.text.toString().trim() } catch (_: Throwable) { "" }
+        if (code.isEmpty()) {
+            Toast.makeText(this, "暂未捕获到 code", Toast.LENGTH_SHORT).show()
+            return
+        }
+        etUploadCode.setText(code)
+        AppLogger.i(TAG, "已填入当前捕获的 code")
+        Toast.makeText(this, "已填入当前捕获的 Code", Toast.LENGTH_SHORT).show()
+    }
+
+    /** 去掉首尾空白与结尾的 '/'，便于拼接 /api/... */
+    private fun normalizeBaseUrl(raw: String): String =
+        raw.trim().trimEnd('/')
+
+    /** 「验证Token」：GET {base}/api/auth/validate，检查 ok 与 data.valid */
+    private fun validatePanelToken() {
+        val base = normalizeBaseUrl(etApiBase.text.toString())
+        val token = etAdminToken.text.toString().trim()
+        if (base.isEmpty() || token.isEmpty()) {
+            Toast.makeText(this, "请先填写面板 API 地址和 Token", Toast.LENGTH_SHORT).show()
+            return
+        }
+        btnValidateToken.isEnabled = false
+        tvUploadStatus.text = "正在验证 Token..."
+        AppLogger.i(TAG, "验证面板 Token: $base/api/auth/validate")
+        Thread({
+            val msg = try {
+                val (httpCode, resp) = panelRequest("GET", "$base/api/auth/validate", token, null)
+                val json = try { JSONObject(resp) } catch (_: Throwable) { null }
+                val ok = json?.optBoolean("ok", false) == true
+                val valid = json?.optJSONObject("data")?.optBoolean("valid", false) == true
+                if (httpCode == 200 && ok && valid) {
+                    "Token 有效，面板连接正常"
+                } else {
+                    val err = json?.optString("error").orEmpty()
+                    if (err.isNotBlank()) "验证失败 HTTP $httpCode: $err"
+                    else "验证失败 HTTP $httpCode: $resp"
+                }
+            } catch (t: Throwable) {
+                AppLogger.w(TAG, "验证 Token 异常: ${t.message}")
+                "验证异常: ${t.message}"
+            }
+            runOnUiThread {
+                try {
+                    tvUploadStatus.text = msg
+                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                } catch (_: Throwable) {}
+                try { btnValidateToken.isEnabled = true } catch (_: Throwable) {}
+            }
+        }, "panel-validate").start()
+    }
+
+    /**
+     * 「提交 Code」：POST {base}/api/accounts  {"name","code","platform":"qq"}
+     * 注意：面板运行期错误也可能返回 HTTP 200，必须以业务字段 ok 为准；
+     * name（备注）必填，同名账号会被更新 code 并重启，否则新建并自动启动。
+     */
+    private fun submitPanelCode() {
+        val base = normalizeBaseUrl(etApiBase.text.toString())
+        val token = etAdminToken.text.toString().trim()
+        val name = etAccountName.text.toString().trim()
+        val code = etUploadCode.text.toString().trim()
+        if (base.isEmpty() || token.isEmpty() || name.isEmpty() || code.isEmpty()) {
+            tvUploadStatus.text = "请完整填写 API 地址、Token、账号备注和 Code"
+            Toast.makeText(this, "请完整填写 API 地址、Token、账号备注和 Code", Toast.LENGTH_SHORT).show()
+            return
+        }
+        btnSubmitCode.isEnabled = false
+        tvUploadStatus.text = "正在提交..."
+        AppLogger.i(TAG, "提交 code 到面板: $base/api/accounts name=$name")
+        Thread({
+            val msg = try {
+                val body = JSONObject().apply {
+                    put("name", name)
+                    put("code", code)
+                    put("platform", "qq")
+                }.toString()
+                val (httpCode, resp) = panelRequest("POST", "$base/api/accounts", token, body)
+                val json = try { JSONObject(resp) } catch (_: Throwable) { null }
+                if (json?.optBoolean("ok", false) == true) {
+                    AppLogger.i(TAG, "面板提交成功")
+                    "已提交：账号已添加/更新并启动"
+                } else {
+                    val err = json?.optString("error").orEmpty()
+                    AppLogger.w(TAG, "面板提交失败 HTTP $httpCode: $err")
+                    if (err.isNotBlank()) "提交失败 HTTP $httpCode: $err"
+                    else "提交失败 HTTP $httpCode: $resp"
+                }
+            } catch (t: Throwable) {
+                AppLogger.w(TAG, "提交 code 异常: ${t.message}")
+                "提交异常: ${t.message}"
+            }
+            runOnUiThread {
+                try {
+                    tvUploadStatus.text = msg
+                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                } catch (_: Throwable) {}
+                try { btnSubmitCode.isEnabled = true } catch (_: Throwable) {}
+            }
+        }, "panel-submit").start()
+    }
+
+    /**
+     * 面板 HTTP 请求：HttpURLConnection，连接/读取超时各 15s，
+     * 鉴权头为 x-admin-token（不是 Authorization Bearer）。
+     * 返回 HTTP 状态码 + 响应体文本。
+     */
+    private fun panelRequest(method: String, url: String, token: String, body: String?): Pair<Int, String> {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = method
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 15_000
+            conn.setRequestProperty("x-admin-token", token)
+            conn.setRequestProperty("Accept", "application/json")
+            if (body != null) {
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            }
+            val httpCode = conn.responseCode
+            val stream = if (httpCode in 200..299) conn.inputStream else conn.errorStream
+            val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
+            return httpCode to text
+        } finally {
+            conn.disconnect()
+        }
     }
 
     // ---------------- 启动/停止 ----------------

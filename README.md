@@ -71,6 +71,29 @@ App VPN(MITM) ── 解密后 u2c 泵 ──▶ WsFriendSniffer（只读嗅探�
 - `crypto/`：本地 CA 生成（BouncyCastle）与信任自检
 - `util/CodeBus.kt`：`:vpn` → 主进程跨进程事件通道
 
+## 上传到 qq-farm-bot 面板
+
+主界面底部新增「上传到 qq-farm-bot 面板」卡片，可把抓到的 `code` 直接配置进已部署的
+qq-farm-bot Web 面板（登录/更新对应 QQ 账号）：
+
+1. 填写 **面板 API 地址**（如 `http://192.168.1.10:3007`，面板默认端口 3007）、
+   **管理 Token**、**账号备注**（必填，面板内同名账号会被更新 code 并重启，否则新建并自动启动）
+2. Token 获取：登录面板后，浏览器开发者工具 → localStorage 里的 `admin_token`；
+   或抓包面板请求，看请求头里的 `x-admin-token`
+3. 点「填入已抓取的Code」把当前捕获的 code 填进 Code 输入框（也可手动粘贴）
+4. 点「保存配置」可记住地址 / Token / 备注（code 不会保存）；「验证Token」可测试连通性
+5. 点「提交 Code」：App 以 `x-admin-token` 请求头调用 `POST {地址}/api/accounts`，
+   结果显示在卡片底部状态栏与 Toast
+
+## GitHub Actions 自动编译发布
+
+仓库自带 `.github/workflows/android.yml`：
+
+- push 到 `master` / `main`，或在 Actions 页面手动运行（workflow_dispatch）：
+  自动跑单测并编译 debug + release APK，在运行结果的 **Artifacts** 里下载
+- 打 `v*` 开头的 tag 并推送（如 `git tag v2.1.0 && git push origin v2.1.0`）：
+  除 Artifacts 外还会自动创建 **GitHub Release** 并附带两个 APK、自动生成更新日志
+
 ## License
 
 本项目为 **huojiujian** 开源。
