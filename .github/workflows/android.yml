@@ -28,16 +28,39 @@ jobs:
 
       # ubuntu-latest runner 预装 Android SDK（ANDROID_HOME/ANDROID_SDK_ROOT 已就绪），
       # 无需 android-actions/setup-android，直接用预装的 sdkmanager 补齐缺失组件。
+      # 整个步骤输出 tee 到 sdk-install.log，失败时由下一步回传到 ci-debug 分支。
       - name: Install Android SDK components
         run: |
+          set -o pipefail
+          {
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          SDKMANAGER=sdkmanager
-          command -v sdkmanager >/dev/null 2>&1 || SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          ls -la "$ANDROID_HOME" || true
+          ls -la "$ANDROID_HOME/cmdline-tools" || true
+          SDKMANAGER="$(command -v sdkmanager || true)"
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER="$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)"
+          fi
           echo "using sdkmanager: $SDKMANAGER"
           "$SDKMANAGER" --list_installed || true
+          "$SDKMANAGER" --list | grep -E "platforms;android-3|build-tools;3|ndk;" | head -40 || true
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platforms;android-37" "build-tools;36.0.0" "ndk;26.3.11579264"
+          "$SDKMANAGER" "platforms;android-37"
+          "$SDKMANAGER" "build-tools;36.0.0"
+          "$SDKMANAGER" "ndk;26.3.11579264"
+          } 2>&1 | tee sdk-install.log
+
+      - name: Push SDK install log on failure
+        if: failure()
+        run: |
+          git config user.name "ci-debug"
+          git config user.email "ci-debug@users.noreply.github.com"
+          git checkout --orphan ci-debug || git checkout ci-debug
+          git rm -rf . >/dev/null 2>&1 || true
+          cp sdk-install.log SDK-INSTALL-FAILURE.md || echo "no log captured" > SDK-INSTALL-FAILURE.md
+          git add SDK-INSTALL-FAILURE.md
+          git commit -m "ci debug: sdk install failure run $GITHUB_RUN_ID ($GITHUB_SHA)" || true
+          git push -f origin ci-debug
 
       - name: Unit tests
         run: |
