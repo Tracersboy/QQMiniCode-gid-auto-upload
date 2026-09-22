@@ -45,9 +45,10 @@ jobs:
           "$SDKMANAGER" --list_installed || true
           "$SDKMANAGER" --list | grep -E "platforms;android-3|build-tools;3|ndk;" | head -40 || true
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platforms;android-37"
-          "$SDKMANAGER" "build-tools;36.0.0"
-          "$SDKMANAGER" "ndk;26.3.11579264"
+          # runner 预装包名带小版本号：platforms;android-37.0（不是 android-37）。
+          # build-tools 36.0.0/37.0.0 与 NDK 27.3+ 均已预装，项目未锁定 ndkVersion，
+          # AGP 会自动选用预装 NDK 做 release strip，无需再下载 r26d。
+          "$SDKMANAGER" "platforms;android-37.0"
           } 2>&1 | tee sdk-install.log
 
       - name: Push SDK install log on failure
