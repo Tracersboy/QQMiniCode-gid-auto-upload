@@ -76,6 +76,8 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_ADMIN_TOKEN = "admin_token"
         private const val KEY_ACCOUNT_NAME = "account_name"
         private const val KEY_AUTO_FILL = "auto_fill_code"
+        private const val KEY_ADMIN_USER = "admin_user"
+        private const val KEY_ADMIN_PASSWORD = "admin_password"
     }
 
     private lateinit var btnStartCapture: Button
@@ -108,6 +110,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSubmitCode: Button
     private lateinit var switchAutoFill: SwitchCompat
     private lateinit var btnQueryOnlineStatus: Button
+    private lateinit var etAdminUser: EditText
+    private lateinit var etAdminPassword: EditText
+    private lateinit var btnLoginToken: Button
 
     // 仅调试版存在的控件
     private var tvLog: TextView? = null
@@ -261,12 +266,16 @@ class MainActivity : AppCompatActivity() {
         btnSubmitCode       = findViewById(R.id.btnSubmitCode)
         switchAutoFill      = findViewById(R.id.switchAutoFill)
         btnQueryOnlineStatus = findViewById(R.id.btnQueryOnlineStatus)
+        etAdminUser         = findViewById(R.id.etAdminUser)
+        etAdminPassword     = findViewById(R.id.etAdminPassword)
+        btnLoginToken       = findViewById(R.id.btnLoginToken)
         loadPanelConfig()
         btnSavePanelConfig.setOnClickListener { savePanelConfig() }
         btnFillCapturedCode.setOnClickListener { fillCapturedCode() }
         btnValidateToken.setOnClickListener { validatePanelToken() }
         btnSubmitCode.setOnClickListener { submitPanelCode() }
         btnQueryOnlineStatus.setOnClickListener { queryOnlineStatus() }
+        btnLoginToken.setOnClickListener { loginAndFillToken() }
         // 开关状态即时持久化（「保存配置」里也会再写一次，双保险）
         switchAutoFill.setOnCheckedChangeListener { _, isChecked ->
             try {
@@ -462,6 +471,8 @@ class MainActivity : AppCompatActivity() {
             etApiBase.setText(sp.getString(KEY_API_BASE, "") ?: "")
             etAdminToken.setText(sp.getString(KEY_ADMIN_TOKEN, "") ?: "")
             etAccountName.setText(sp.getString(KEY_ACCOUNT_NAME, "") ?: "")
+            etAdminUser.setText(sp.getString(KEY_ADMIN_USER, "") ?: "")
+            etAdminPassword.setText(sp.getString(KEY_ADMIN_PASSWORD, "") ?: "")
             // 自动填入开关默认开
             switchAutoFill.isChecked = sp.getBoolean(KEY_AUTO_FILL, true)
         } catch (t: Throwable) {
@@ -476,6 +487,8 @@ class MainActivity : AppCompatActivity() {
                 .putString(KEY_API_BASE, normalizeBaseUrl(etApiBase.text.toString()))
                 .putString(KEY_ADMIN_TOKEN, etAdminToken.text.toString().trim())
                 .putString(KEY_ACCOUNT_NAME, etAccountName.text.toString().trim())
+                .putString(KEY_ADMIN_USER, etAdminUser.text.toString().trim())
+                .putString(KEY_ADMIN_PASSWORD, etAdminPassword.text.toString())
                 .putBoolean(KEY_AUTO_FILL, switchAutoFill.isChecked)
                 .apply()
             AppLogger.i(TAG, "面板配置已保存")
@@ -515,7 +528,7 @@ class MainActivity : AppCompatActivity() {
         AppLogger.i(TAG, "验证面板 Token: $base/api/auth/validate")
         Thread({
             val msg = try {
-                val (httpCode, resp) = panelRequest("GET", "$base/api/auth/validate", token, null)
+                val (httpCode, resp) = panelRequestWithRelogin(base, "GET", "/api/auth/validate", token, null)
                 val json = try { JSONObject(resp) } catch (_: Throwable) { null }
                 val ok = json?.optBoolean("ok", false) == true
                 val valid = json?.optJSONObject("data")?.optBoolean("valid", false) == true
@@ -523,8 +536,9 @@ class MainActivity : AppCompatActivity() {
                     "Token 有效，面板连接正常"
                 } else {
                     val err = json?.optString("error").orEmpty()
-                    if (err.isNotBlank()) "验证失败 HTTP $httpCode: $err"
-                    else "验证失败 HTTP $httpCode: $resp"
+                    withUnauthorizedHint(httpCode,
+                        if (err.isNotBlank()) "验证失败 HTTP $httpCode: $err"
+                        else "验证失败 HTTP $httpCode: $resp")
                 }
             } catch (t: Throwable) {
                 AppLogger.w(TAG, "验证 Token 异常: ${t.message}")
@@ -565,7 +579,7 @@ class MainActivity : AppCompatActivity() {
                     put("code", code)
                     put("platform", "qq")
                 }.toString()
-                val (httpCode, resp) = panelRequest("POST", "$base/api/accounts", token, body)
+                val (httpCode, resp) = panelRequestWithRelogin(base, "POST", "/api/accounts", token, body)
                 val json = try { JSONObject(resp) } catch (_: Throwable) { null }
                 if (json?.optBoolean("ok", false) == true) {
                     AppLogger.i(TAG, "面板提交成功")
@@ -573,8 +587,9 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     val err = json?.optString("error").orEmpty()
                     AppLogger.w(TAG, "面板提交失败 HTTP $httpCode: $err")
-                    if (err.isNotBlank()) "提交失败 HTTP $httpCode: $err"
-                    else "提交失败 HTTP $httpCode: $resp"
+                    withUnauthorizedHint(httpCode,
+                        if (err.isNotBlank()) "提交失败 HTTP $httpCode: $err"
+                        else "提交失败 HTTP $httpCode: $resp")
                 }
             } catch (t: Throwable) {
                 AppLogger.w(TAG, "提交 code 异常: ${t.message}")
@@ -610,13 +625,14 @@ class MainActivity : AppCompatActivity() {
         Thread({
             var toastMsg = "查询完成"
             val msg = try {
-                val (httpCode, resp) = panelRequest("GET", "$base/api/accounts", token, null)
+                val (httpCode, resp) = panelRequestWithRelogin(base, "GET", "/api/accounts", token, null)
                 val json = try { JSONObject(resp) } catch (_: Throwable) { null }
                 if (json?.optBoolean("ok", false) != true) {
                     val err = json?.optString("error").orEmpty()
                     toastMsg = "查询失败"
-                    if (err.isNotBlank()) "查询失败 HTTP $httpCode: $err"
-                    else "查询失败 HTTP $httpCode: $resp"
+                    withUnauthorizedHint(httpCode,
+                        if (err.isNotBlank()) "查询失败 HTTP $httpCode: $err"
+                        else "查询失败 HTTP $httpCode: $resp")
                 } else {
                     val accounts = json.optJSONObject("data")?.optJSONArray("accounts")
                     if (accounts == null || accounts.length() == 0) {
@@ -656,7 +672,7 @@ class MainActivity : AppCompatActivity() {
                             // 运行中时拉取实时状态（等级/经验），字段缺失时静默跳过
                             if (running) {
                                 try {
-                                    val (_, resp2) = panelRequest("GET", "$base/api/status",
+                                    val (_, resp2) = panelRequestWithRelogin(base, "GET", "/api/status",
                                         token, null, acc.optLong("id").toString())
                                     val j2 = try { JSONObject(resp2) } catch (_: Throwable) { null }
                                     val st = j2?.optJSONObject("data")?.optJSONObject("status")
@@ -698,6 +714,118 @@ class MainActivity : AppCompatActivity() {
             if (nick.isNotEmpty()) append(" | ").append(nick)
         }
     }
+
+    /**
+     * 「登录获取Token」：用管理员账号密码登录面板换取 token 并自动填入。
+     * 每次点击只登录一次（错误密码连续 5 次会被面板锁定 15 分钟，绝不自动重试）。
+     */
+    private fun loginAndFillToken() {
+        val base = normalizeBaseUrl(etApiBase.text.toString())
+        val user = etAdminUser.text.toString().trim()
+        val pwd = etAdminPassword.text.toString()
+        if (base.isEmpty() || user.isEmpty() || pwd.isEmpty()) {
+            Toast.makeText(this, "请先填写面板 API 地址、管理员账号和密码", Toast.LENGTH_SHORT).show()
+            return
+        }
+        btnLoginToken.isEnabled = false
+        tvUploadStatus.text = "正在登录获取 Token..."
+        AppLogger.i(TAG, "登录面板获取 Token: $base/api/login user=$user")
+        Thread({
+            val (token, loginMsg) = performPanelLogin(base, user, pwd)
+            if (token != null) {
+                saveLoginResult(token, user, pwd)
+                AppLogger.i(TAG, "面板登录成功，Token 已自动填入并保存")
+            } else {
+                AppLogger.w(TAG, "面板登录失败: $loginMsg")
+            }
+            val msg = if (token != null) "登录成功，Token 已自动填入并保存" else loginMsg
+            runOnUiThread {
+                try {
+                    tvUploadStatus.text = msg
+                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                } catch (_: Throwable) {}
+                try { btnLoginToken.isEnabled = true } catch (_: Throwable) {}
+            }
+        }, "panel-login").start()
+    }
+
+    /**
+     * 面板登录（后台线程）：POST /api/login {"username","password"}。
+     * 成功返回 token（data.token）；失败返回 null + 含 HTTP 码与服务器 error 的说明
+     * （401 invalid_credentials / 429 rate_limit / 423 locked 等原文展示）。
+     * 只调用一次，绝不自动重试，也不经过 401 重登包装，避免递归。
+     */
+    private fun performPanelLogin(base: String, user: String, pwd: String): Pair<String?, String> {
+        return try {
+            val body = JSONObject().apply {
+                put("username", user)
+                put("password", pwd)
+            }.toString()
+            // 登录接口不需要 token，x-admin-token 传空串即可（面板忽略）
+            val (httpCode, resp) = panelRequest("POST", "$base/api/login", "", body)
+            val json = try { JSONObject(resp) } catch (_: Throwable) { null }
+            if (json?.optBoolean("ok", false) == true) {
+                val token = json.optJSONObject("data")?.optString("token")?.trim().orEmpty()
+                if (token.isNotEmpty()) token to "ok"
+                else null to "登录响应缺少 token 字段"
+            } else {
+                val err = json?.optString("error").orEmpty()
+                null to (if (err.isNotBlank()) "登录失败 HTTP $httpCode: $err"
+                        else "登录失败 HTTP $httpCode: $resp")
+            }
+        } catch (t: Throwable) {
+            null to "登录异常: ${t.message}"
+        }
+    }
+
+    /** 登录成功后：持久化 token + 管理员账号密码，并在主线程更新 token 输入框 */
+    private fun saveLoginResult(token: String, user: String, pwd: String) {
+        try {
+            getSharedPreferences(PREFS_PANEL, Context.MODE_PRIVATE).edit()
+                .putString(KEY_ADMIN_TOKEN, token)
+                .putString(KEY_ADMIN_USER, user)
+                .putString(KEY_ADMIN_PASSWORD, pwd)
+                .apply()
+        } catch (t: Throwable) {
+            AppLogger.w(TAG, "保存登录结果失败: ${t.message}")
+        }
+        runOnUiThread {
+            try { etAdminToken.setText(token) } catch (_: Throwable) {}
+        }
+    }
+
+    /**
+     * 带 401 自动重登的面板请求（必须在后台线程调用）：
+     * 已鉴权接口返回 HTTP 401（token 失效/面板重启）且本地存有管理员账号密码时，
+     * 自动登录一次换新 token，更新输入框与本地存储后**重试原请求一次**并返回重试结果；
+     * 未保存凭据则原样返回 401（由调用方提示去登录/检查 token）。
+     * 登录请求本身不经过本包装，不会递归重试。
+     */
+    private fun panelRequestWithRelogin(base: String, method: String, path: String, token: String,
+                                        body: String?, accountId: String? = null): Pair<Int, String> {
+        val result = panelRequest(method, base + path, token, body, accountId)
+        if (result.first != 401) return result
+        val sp = getSharedPreferences(PREFS_PANEL, Context.MODE_PRIVATE)
+        val user = sp.getString(KEY_ADMIN_USER, "")?.trim().orEmpty()
+        val pwd = sp.getString(KEY_ADMIN_PASSWORD, "") ?: ""
+        if (user.isEmpty() || pwd.isEmpty()) {
+            AppLogger.w(TAG, "面板返回 401 且未保存管理员账号密码，无法自动重登")
+            return result
+        }
+        AppLogger.i(TAG, "面板返回 401，使用保存的管理员账号自动重登并重试 $path ...")
+        val (newToken, loginMsg) = performPanelLogin(base, user, pwd)
+        if (newToken == null) {
+            AppLogger.w(TAG, "自动重登失败: $loginMsg")
+            return result
+        }
+        saveLoginResult(newToken, user, pwd)
+        AppLogger.i(TAG, "自动重登成功，重试原请求 $path")
+        return panelRequest(method, base + path, newToken, body, accountId)
+    }
+
+    /** 401 且自动重登不可用/仍失败时，给错误信息追加操作提示 */
+    private fun withUnauthorizedHint(httpCode: Int, msg: String): String =
+        if (httpCode == 401) "$msg（Token 已失效：可点「登录获取Token」自动换新，或检查手动填写的 Token）" else msg
 
     /**
      * 面板 HTTP 请求：HttpURLConnection，连接/读取超时各 15s，

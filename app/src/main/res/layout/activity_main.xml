@@ -379,6 +379,28 @@
                 android:textColor="@color/text_primary"/>
 
             <EditText
+                android:id="@+id/etAdminUser"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/upload_hint_user"
+                android:inputType="text"
+                android:singleLine="true"
+                android:textSize="14sp"
+                android:textColor="@color/text_primary"/>
+
+            <EditText
+                android:id="@+id/etAdminPassword"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:hint="@string/upload_hint_password"
+                android:inputType="textPassword"
+                android:singleLine="true"
+                android:textSize="14sp"
+                android:textColor="@color/text_primary"/>
+
+            <EditText
                 android:id="@+id/etAdminToken"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -492,19 +514,42 @@
                     app:backgroundTint="@color/accent"/>
             </LinearLayout>
 
-            <!-- 查询面板账号在线状态 -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnQueryOnlineStatus"
-                style="@style/Widget.Material3.Button.TonalButton"
+            <!-- 登录获取Token + 查询面板账号在线状态 -->
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="40dp"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="@string/btn_query_online_status"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:textColor="@color/accent"
-                app:cornerRadius="10dp"
-                app:backgroundTint="@color/accent_tonal"/>
+                android:orientation="horizontal"
+                android:weightSum="2">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnLoginToken"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:text="@string/btn_login_token"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/accent"
+                    app:cornerRadius="10dp"
+                    app:backgroundTint="@color/accent_tonal"/>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnQueryOnlineStatus"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:text="@string/btn_query_online_status"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/accent"
+                    app:cornerRadius="10dp"
+                    app:backgroundTint="@color/accent_tonal"/>
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/tvUploadStatus"

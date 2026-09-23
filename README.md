@@ -24,6 +24,7 @@
 | ✅ 「验证Token」 | `GET /api/auth/validate` 预检 Token 与面板连通性 |
 | 🔀 开关「抓到Code后自动填入」 | 默认开启；抓到新 code 时自动填入上传输入框（只填入，不自动提交） |
 | 📊 按钮「在线状态」 | `GET /api/accounts` 查询面板账号在线状态（运行中时再查 `/api/status` 附等级/经验）；备注留空时列出面板全部账号 |
+| 🔑 Token 自动获取 + 401 自动重登 | 填管理员账号密码后点「登录获取Token」一键换取管理 Token；之后任何已鉴权请求遇 401（面板重启 token 失效）时，App 自动重登一次并重试原请求，无感续期 |
 | 🤖 GitHub Actions 自动编译 | push 到 `main`/`master` 自动构建 debug + release APK 并上传 Artifacts；打 `v*` tag 自动发布 Release 附 APK |
 
 ### 版本历史
@@ -33,6 +34,7 @@
 | 2.0.0 | 原版（huojiujian）：抓包 code + 好友 GID 抓包即解析 |
 | 2.1.0 | 本 Fork：新增「上传到 qq-farm-bot 面板」卡片 + GitHub Actions 自动编译发布 |
 | 2.2.0 | 本 Fork：新增「抓到Code后自动填入」开关 + 面板账号「在线状态」查询 |
+| 2.3.0 | 本 Fork：管理员账号密码自动登录获取 Token + 401 自动重登重试 |
 
 ## 功能
 
@@ -101,18 +103,24 @@ App VPN(MITM) ── 解密后 u2c 泵 ──▶ WsFriendSniffer（只读嗅探�
 qq-farm-bot Web 面板（登录/更新对应 QQ 账号）：
 
 1. 填写 **面板 API 地址**（如 `http://192.168.1.10:3007`，面板默认端口 3007）、
-   **管理 Token**、**账号备注**（必填，面板内同名账号会被更新 code 并重启，否则新建并自动启动）
-2. Token 获取：浏览器登录面板后按 **F12 → 应用(Application) → Local Storage → `admin_token`**；
-   或抓包面板请求，看请求头里的 `x-admin-token`。
-   ⚠️ 注意：**面板重启后 token 会失效**，需重新登录面板再取一次
+   **管理员账号 / 密码**、**账号备注**（必填，面板内同名账号会被更新 code 并重启，否则新建并自动启动）
+2. 点「登录获取Token」（**推荐用法**）：App 调用 `POST {地址}/api/login` 用管理员账号密码
+   换取管理 Token 并自动填入 + 本地保存。Token 是面板内存态、**面板重启即失效**——
+   只要保存了账号密码，之后任何请求遇到 401 时 App 会**自动重登一次并重试原请求**，无感续期。
+   备选：也可以手动浏览器登录面板 → **F12 → 应用(Application) → Local Storage → `admin_token`**
+   复制粘贴到 Token 输入框（或抓包面板请求看 `x-admin-token` 头）
 3. 点「填入已抓取的Code」把当前捕获的 code 填进 Code 输入框（也可手动粘贴）；
    打开「抓到Code后自动填入」开关（默认开）后，每次抓到新 code 会自动填入
-4. 点「保存配置」可记住地址 / Token / 备注 / 开关状态（code 不会保存）；
+4. 点「保存配置」可记住地址 / Token / 管理员账号密码 / 备注 / 开关状态（code 不会保存）；
    「验证Token」可测试连通性
 5. 点「提交 Code」：App 以 `x-admin-token` 请求头调用 `POST {地址}/api/accounts`，
    结果显示在卡片底部状态栏与 Toast
 6. 点「在线状态」：查询面板账号运行状态——填写备注时显示该账号的
    在线情况 / 昵称 / QQ 号，运行中还会附带等级与经验；备注留空则列出面板全部账号
+
+> 🔒 隐私说明：管理员账号密码与管理 Token 仅以**明文**保存在本机 SharedPreferences
+> （`panel_config`），不会上传到你填写的面板地址以外的任何地方。调试阶段接受明文存储，
+> 请勿在不可信设备上使用，也建议为面板设置专用密码而非复用重要密码。
 
 ## GitHub Actions 自动编译发布
 
